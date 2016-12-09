@@ -23,37 +23,49 @@ namespace ObservableLogging
     public void OnError(Exception error) => _subject.OnError(error);
     public void OnNext(MethodCallExpression value) => _subject.OnNext(value);
 
-    public void When(Action<ILog> whenMethodCalled, Expression<Action<ILog>> then) =>
-      Subscribe(whenMethodCalled.Method, then);
+    public void When(Action<ILog> when, Action then) =>
+      Subscribe(when.Method, then.Method);
+    public void When(Action<ILog> when, Action<ILog> then) =>
+      Subscribe(when.Method, then.Method);
+    public void When<T1>(Action<ILog, T1> when, Action<T1> then) =>
+      Subscribe(when.Method, then.Method);
+    public void When<T1>(Action<ILog, T1> when, Action<ILog,T1> then) =>
+      Subscribe(when.Method, then.Method);
+    public void When<T1, T2>(Action<ILog, T1, T2> when, Action<T1, T2> then) =>
+      Subscribe(when.Method, then.Method);
+    public void When<T1, T2>(Action<ILog, T1, T2> when, Action<ILog,T1, T2> then) =>
+      Subscribe(when.Method, then.Method);
+    public void When<T1, T2, T3>(Action<ILog, T1, T2, T3> when, Action<T1, T2, T3> then) =>
+      Subscribe(when.Method, then.Method);
+    public void When<T1, T2, T3>(Action<ILog, T1, T2, T3> when, Action<ILog, T1, T2, T3> then) =>
+      Subscribe(when.Method, then.Method);
+    public void When<T1, T2, T3, T4>(Action<ILog, T1, T2, T3, T4> when, Action<T1, T2, T3, T4> then) =>
+      Subscribe(when.Method, then.Method);
+    public void When<T1, T2, T3, T4>(Action<ILog, T1, T2, T3, T4> when, Action<ILog, T1, T2, T3, T4> then) =>
+      Subscribe(when.Method, then.Method);
 
-    public void When<T1>(Action<ILog, T1> whenMethodCalled, Expression<Action<ILog,T1>> then) =>
-      Subscribe(whenMethodCalled.Method, then);
-
-    public void When<T1, T2>(Action<ILog, T1, T2> whenMethodCalled, Expression<Action<ILog,T1, T2>> then) =>
-      Subscribe(whenMethodCalled.Method, then);
-
-    // etc...
-
-    private void Subscribe(MethodInfo when, Expression then)
+    private void Subscribe(MethodInfo when, MethodInfo then)
     {
       // destructure and compile lambda of type (Action<Expression>), then subscribe it to _subject
 
       var e = Expression.Parameter(typeof(MethodCallExpression), "e"); // Yo dawg, I heard you like expressions
       var args = Expression.Property(e, nameof(MethodCallExpression.Arguments));
-      var destructured = when.GetParameters()
+      var thenParameters = then.GetParameters();
+      var includesLog = thenParameters.Length > 0 && thenParameters[0].ParameterType == typeof(ILog);
+      var offset = includesLog ? 0 : 1;
+      var destructured = when.GetParameters().Skip(offset)
         .Select((parameter, paramIndex) => {
-          var i = Expression.Constant(paramIndex, typeof(int));
+          var i = Expression.Constant(paramIndex + offset, typeof(int));
           var paramExp = Expression.Call(args, "get_Item", new Type[0], i);
           var paramConstExp = Expression.Convert(paramExp, typeof(ConstantExpression));
           var value = Expression.Property(paramConstExp, nameof(ConstantExpression.Value));
           return Expression.Convert(value, parameter.ParameterType);
         });
-      var callThen = Expression.Invoke(then, destructured);
+      var callThen = Expression.Call(Expression.Constant(this, GetType()), then, destructured);
       var lambda = Expression.Lambda<Action<MethodCallExpression>>(callThen, e);
-      var compiled = lambda.Compile();
       _subject
         .Where(call => call.Method == when)
-        .Subscribe(compiled);
+        .Subscribe(lambda.Compile());
     }
   }
 }

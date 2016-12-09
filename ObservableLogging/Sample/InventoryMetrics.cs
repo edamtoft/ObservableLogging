@@ -11,36 +11,29 @@ namespace ObservableLogging.Sample
   /// </summary>
   class InventoryMetrics : StructuredLogObserver
   {
+
+    private int _count;
+    private double _totalSeconds;
+    private DateTime _whenStarted;
+
     public InventoryMetrics()
     {
-      When(InventoryLog.ImportStarted, log => Started(log));
-      When(InventoryLog.ImportFinished, log => Finished(log));
-      When(InventoryLog.ImportFailed, (ILog log, Exception err) => Error(log, err));
-    }
+      When(InventoryLog.ImportStarted, () => _whenStarted = DateTime.Now);
 
-    void Started(ILog log)
-    {
-      WhenStarted = DateTime.Now;
-    }
-
-    void Finished(ILog log)
-    {
-      var span = DateTime.Now - WhenStarted;
-      log.ImportFinished(span);
-    }
-
-    void Error(ILog log, Exception err)
-    {
-      if (err is InvalidOperationException)
+      When(InventoryLog.ImportFinished, log =>
       {
-        log.Error("Invalid Operation Exception");
-        return;
-      }
-      var span = DateTime.Now - WhenStarted;
-      log.ImportFailed(span, err);
+        var span = DateTime.Now - _whenStarted;
+        _count++;
+        _totalSeconds += span.TotalSeconds;
+        var avg = TimeSpan.FromSeconds(_totalSeconds / _count);
+        log.ImportFinished(span, avg);
+      });
+
+      When(InventoryLog.ImportFailed, (ILog log, Exception err) =>
+      {
+        var span = DateTime.Now - _whenStarted;
+        log.ImportFailed(span, err);
+      });
     }
-
-
-    private DateTime WhenStarted;
   }
 }
